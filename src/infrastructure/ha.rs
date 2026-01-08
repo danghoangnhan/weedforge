@@ -1,6 +1,8 @@
 //! High availability and failover logic.
 
-use crate::domain::{AssignOptions, AssignResult, DomainError, DomainResult, LookupResult, MasterPort};
+use crate::domain::{
+    AssignOptions, AssignResult, DomainError, DomainResult, LookupResult, MasterPort,
+};
 use crate::infrastructure::http::HttpMasterClient;
 use rand::seq::SliceRandom;
 use reqwest::Client;

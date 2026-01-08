@@ -78,14 +78,14 @@ impl HttpMasterClient {
             url.push_str(&params.join("&"));
         }
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| DomainError::AssignmentFailed {
-                reason: format!("HTTP request failed: {e}"),
-            })?;
+        let response =
+            self.client
+                .get(&url)
+                .send()
+                .await
+                .map_err(|e| DomainError::AssignmentFailed {
+                    reason: format!("HTTP request failed: {e}"),
+                })?;
 
         if !response.status().is_success() {
             return Err(DomainError::AssignmentFailed {
