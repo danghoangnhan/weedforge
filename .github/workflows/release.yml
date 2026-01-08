@@ -50,6 +50,9 @@ jobs:
           rust-toolchain: stable
           # Use zig for cross-compilation - handles ring's ARM assembly correctly
           zig: true
+        env:
+          # Use generic ARMv8 architecture to avoid unsupported -march=armv8.4-a+sha3
+          CFLAGS_aarch64_unknown_linux_gnu: "-march=armv8-a"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
