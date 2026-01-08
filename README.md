@@ -210,11 +210,3 @@ cargo fmt --check
 # Security audit
 cargo deny check
 ```
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Contributing
-
-Contributions are welcome! Please read [CLAUDE.md](CLAUDE.md) for architecture guidelines.

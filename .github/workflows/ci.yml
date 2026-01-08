@@ -151,9 +151,7 @@ jobs:
         run: pip install maturin
 
       - name: Build Python wheel
-        run: |
-          cd crates/weedforge-python
-          maturin build --release
+        run: maturin build --release
 
   msrv:
     name: MSRV (1.75)
