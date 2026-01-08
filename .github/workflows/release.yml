@@ -25,7 +25,7 @@ jobs:
           NEW_VERSION=$(cargo pkgid | sed 's/.*#//' | awk -F. -v OFS=. '{$NF++; print}')
           echo "Bumping version to $NEW_VERSION"
           cargo set-version $NEW_VERSION
-          cargo publish
+          cargo publish --allow-dirty
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
