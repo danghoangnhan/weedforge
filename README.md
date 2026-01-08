@@ -1,6 +1,6 @@
 # weedforge
 
-A **Rust-first, Python-friendly SDK** for [SeaweedFS](https://github.com/seaweedfs/seaweedfs).
+A **A lightweight Rust SDK with Python bindings** for [SeaweedFS](https://github.com/seaweedfs/seaweedfs).
 
 [![Crates.io](https://img.shields.io/crates/v/weedforge.svg)](https://crates.io/crates/weedforge)
 [![PyPI](https://img.shields.io/pypi/v/weedforge.svg)](https://pypi.org/project/weedforge/)
