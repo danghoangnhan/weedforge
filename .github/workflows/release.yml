@@ -23,9 +23,9 @@ jobs:
       - name: Bump patch version and publish
         run: |
           # Get the latest published version from crates.io API (more reliable than cargo search)
-          LATEST_VERSION=$(curl -s https://crates.io/api/v1/crates/weedforge | jq -r '.crate.max_version // "0.1.0"')
+          LATEST_VERSION=$(curl -s https://crates.io/api/v1/crates/weedforge | jq -r '.crate.max_version // "0.1.1"')
           if [ "$LATEST_VERSION" = "null" ] || [ -z "$LATEST_VERSION" ]; then
-            LATEST_VERSION="0.1.0"
+            LATEST_VERSION="0.1.1"
           fi
           echo "Latest version on crates.io: $LATEST_VERSION"
 

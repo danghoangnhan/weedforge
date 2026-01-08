@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "weedforge"
-version = "0.1.0"
+version = "0.1.1"
 description = "Rust-first, Python-friendly SDK for SeaweedFS"
 readme = "README.md"
 license = { text = "MIT" }
