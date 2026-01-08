@@ -41,6 +41,7 @@ pub struct HttpMasterClient {
 }
 
 impl HttpMasterClient {
+    /// Creates a new HTTP master client.
     #[must_use]
     pub fn new(client: Client, base_url: impl Into<String>) -> Self {
         let mut base_url = base_url.into();
@@ -50,6 +51,7 @@ impl HttpMasterClient {
         Self { client, base_url }
     }
 
+    /// Returns the base URL of this client.
     #[must_use]
     pub fn base_url(&self) -> &str {
         &self.base_url

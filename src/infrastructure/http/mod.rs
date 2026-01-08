@@ -9,8 +9,11 @@ use std::time::Duration;
 /// Configuration for the HTTP client.
 #[derive(Debug, Clone)]
 pub struct HttpClientConfig {
+    /// Timeout for establishing a connection.
     pub connect_timeout: Duration,
+    /// Timeout for the entire request.
     pub request_timeout: Duration,
+    /// Whether to accept invalid TLS certificates (use with caution).
     pub danger_accept_invalid_certs: bool,
 }
 
@@ -25,12 +28,14 @@ impl Default for HttpClientConfig {
 }
 
 impl HttpClientConfig {
+    /// Sets the connection timeout.
     #[must_use]
     pub const fn with_connect_timeout(mut self, timeout: Duration) -> Self {
         self.connect_timeout = timeout;
         self
     }
 
+    /// Sets the request timeout.
     #[must_use]
     pub const fn with_request_timeout(mut self, timeout: Duration) -> Self {
         self.request_timeout = timeout;
@@ -39,6 +44,10 @@ impl HttpClientConfig {
 }
 
 /// Creates a configured HTTP client.
+///
+/// # Errors
+///
+/// Returns an error if the HTTP client cannot be built.
 pub fn create_http_client(config: &HttpClientConfig) -> Result<Client, reqwest::Error> {
     Client::builder()
         .connect_timeout(config.connect_timeout)

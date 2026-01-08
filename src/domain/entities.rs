@@ -4,7 +4,7 @@ use super::errors::{DomainError, DomainResult};
 use std::fmt;
 use std::str::FromStr;
 
-/// A SeaweedFS file identifier.
+/// A `SeaweedFS` file identifier.
 ///
 /// This is a first-class domain entity, not an opaque string.
 /// It provides parsing, validation, and rendering of file IDs.
@@ -47,6 +47,10 @@ impl FileId {
     /// Parses a file ID from a string.
     ///
     /// The expected format is `{volume_id},{file_key}{cookie}`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the string format is invalid.
     pub fn parse(s: &str) -> DomainResult<Self> {
         let (volume_str, key_cookie_str) =
             s.split_once(',')
@@ -88,7 +92,7 @@ impl FileId {
     /// Renders the file ID as a string suitable for URLs.
     #[must_use]
     pub fn render(&self) -> String {
-        let combined = (u64::from(self.file_key) << 32) | u64::from(self.cookie);
+        let combined = (self.file_key << 32) | u64::from(self.cookie);
         format!("{},{:016x}", self.volume_id, combined)
     }
 }

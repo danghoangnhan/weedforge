@@ -1,11 +1,14 @@
 //! Integration tests for weedforge.
 //!
-//! These tests require a running SeaweedFS instance.
-//! Set SEAWEEDFS_MASTER environment variable to run.
+//! These tests require a running `SeaweedFS` instance.
+//! Set `SEAWEEDFS_MASTER` environment variable to run.
+
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
 
 use weedforge::{FileId, WeedClient};
 
-/// Test FileId parsing.
+/// Test `FileId` parsing.
 #[test]
 fn test_file_id_parse() {
     let fid = FileId::parse("3,0000016300007037");
@@ -15,7 +18,7 @@ fn test_file_id_parse() {
     assert_eq!(fid.volume_id(), 3);
 }
 
-/// Test FileId roundtrip.
+/// Test `FileId` roundtrip.
 #[test]
 fn test_file_id_roundtrip() {
     let original = FileId::new(42, 0x1234, 0xABCD_EF00);
@@ -42,7 +45,7 @@ fn test_client_builder_with_url() {
     assert!(result.is_ok());
 }
 
-/// Integration test with real SeaweedFS (skipped if not available).
+/// Integration test with real `SeaweedFS` (skipped if not available).
 #[tokio::test]
 #[ignore = "Requires running SeaweedFS instance"]
 async fn test_write_read_delete() {
@@ -61,7 +64,7 @@ async fn test_write_read_delete() {
         .await
         .expect("Failed to write");
 
-    println!("Uploaded file: {}", file_id);
+    println!("Uploaded file: {file_id}");
 
     // Read
     let downloaded = client.read(&file_id).await.expect("Failed to read");
@@ -72,7 +75,7 @@ async fn test_write_read_delete() {
         .public_url(&file_id)
         .await
         .expect("Failed to get URL");
-    println!("Public URL: {}", url);
+    println!("Public URL: {url}");
 
     // Delete
     client.delete(&file_id).await.expect("Failed to delete");

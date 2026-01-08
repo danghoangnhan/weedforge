@@ -2,7 +2,7 @@
 
 use crate::domain::{DomainError, DomainResult, FileId, MasterPort, VolumePort};
 
-/// Use case for deleting files from SeaweedFS.
+/// Use case for deleting files from `SeaweedFS`.
 pub struct DeleteFileUseCase<M, V> {
     master: M,
     volume: V,
@@ -19,6 +19,10 @@ where
     }
 
     /// Executes the delete file use case.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file lookup fails or the deletion fails.
     pub async fn execute(&self, file_id: &FileId) -> DomainResult<()> {
         let lookup = self.master.lookup(file_id.volume_id()).await?;
 

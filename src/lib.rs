@@ -1,6 +1,6 @@
 //! # weedforge
 //!
-//! A Rust-first, Python-friendly SDK for **SeaweedFS**.
+//! A Rust-first, Python-friendly SDK for **`SeaweedFS`**.
 //!
 //! ## Features
 //!

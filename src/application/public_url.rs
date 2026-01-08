@@ -1,7 +1,7 @@
 //! Public URL builder.
 //!
 //! This module provides functionality for constructing public URLs
-//! for SeaweedFS files, including support for image resize parameters.
+//! for `SeaweedFS` files, including support for image resize parameters.
 
 use crate::domain::{DomainError, DomainResult, FileId, LookupResult, MasterPort};
 
@@ -101,7 +101,7 @@ pub struct PublicUrlOptions {
     pub prefer_public: bool,
 }
 
-/// Use case for building public URLs for SeaweedFS files.
+/// Use case for building public URLs for `SeaweedFS` files.
 pub struct PublicUrlBuilder<M> {
     master: M,
 }
@@ -116,6 +116,10 @@ where
     }
 
     /// Builds a public URL for the given file ID.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the volume lookup fails or no replicas are available.
     pub async fn build(
         &self,
         file_id: &FileId,
@@ -154,6 +158,10 @@ where
     }
 
     /// Builds a URL from a pre-fetched lookup result.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no replicas are available in the lookup result.
     pub fn build_from_lookup(
         file_id: &FileId,
         lookup: &LookupResult,

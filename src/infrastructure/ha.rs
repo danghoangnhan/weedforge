@@ -13,21 +13,32 @@ use tokio::sync::RwLock;
 /// Strategy for selecting which master to use.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum MasterSelectionStrategy {
+    /// Distribute requests across masters in round-robin fashion.
     #[default]
     RoundRobin,
+    /// Always try the first master, only fail over on errors.
     Failover,
+    /// Select a random master for each request.
     Random,
 }
 
 /// Configuration for the HA master client.
 #[derive(Debug, Clone)]
 pub struct HaMasterConfig {
+    /// List of master server URLs.
     pub master_urls: Vec<String>,
+    /// Strategy for selecting which master to use.
     pub strategy: MasterSelectionStrategy,
+    /// Maximum number of retry attempts.
     pub max_retries: usize,
 }
 
 impl HaMasterConfig {
+    /// Creates a new HA master configuration.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `master_urls` is empty.
     #[must_use]
     pub fn new(master_urls: Vec<String>) -> Self {
         assert!(!master_urls.is_empty(), "At least one master URL required");
@@ -38,12 +49,14 @@ impl HaMasterConfig {
         }
     }
 
+    /// Sets the master selection strategy.
     #[must_use]
     pub const fn with_strategy(mut self, strategy: MasterSelectionStrategy) -> Self {
         self.strategy = strategy;
         self
     }
 
+    /// Sets the maximum number of retries.
     #[must_use]
     pub const fn with_max_retries(mut self, max_retries: usize) -> Self {
         self.max_retries = max_retries;
@@ -61,7 +74,9 @@ pub struct HaMasterClient {
 }
 
 impl HaMasterClient {
+    /// Creates a new HA master client with the given configuration.
     #[must_use]
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(http_client: Client, config: HaMasterConfig) -> Self {
         let clients = config
             .master_urls
@@ -78,6 +93,7 @@ impl HaMasterClient {
         }
     }
 
+    /// Returns the number of configured master servers.
     #[must_use]
     pub fn master_count(&self) -> usize {
         self.clients.len()
@@ -181,6 +197,7 @@ pub struct HaMasterClientBuilder {
 }
 
 impl HaMasterClientBuilder {
+    /// Creates a new builder with default settings.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -190,12 +207,14 @@ impl HaMasterClientBuilder {
         }
     }
 
+    /// Adds a single master URL.
     #[must_use]
     pub fn master_url(mut self, url: impl Into<String>) -> Self {
         self.master_urls.push(url.into());
         self
     }
 
+    /// Adds multiple master URLs.
     #[must_use]
     pub fn master_urls<I, S>(mut self, urls: I) -> Self
     where
@@ -206,18 +225,25 @@ impl HaMasterClientBuilder {
         self
     }
 
+    /// Sets the master selection strategy.
     #[must_use]
     pub const fn strategy(mut self, strategy: MasterSelectionStrategy) -> Self {
         self.strategy = strategy;
         self
     }
 
+    /// Sets the maximum number of retries.
     #[must_use]
     pub const fn max_retries(mut self, max_retries: usize) -> Self {
         self.max_retries = max_retries;
         self
     }
 
+    /// Builds the HA master client.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if no master URLs have been configured.
     pub fn build(self, http_client: Client) -> DomainResult<HaMasterClient> {
         if self.master_urls.is_empty() {
             return Err(DomainError::ConfigurationError {

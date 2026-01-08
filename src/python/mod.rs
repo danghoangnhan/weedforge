@@ -1,10 +1,11 @@
 //! Python bindings for weedforge.
 //!
-//! This module provides a Python interface to the weedforge SeaweedFS SDK.
+//! This module provides a Python interface to the weedforge `SeaweedFS` SDK.
 //! It uses pyo3 to expose Rust functionality to Python.
 
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::missing_panics_doc)]
+#![allow(clippy::needless_pass_by_value)]
 
 use crate::client::{BlockingWeedClient, WeedClientBuilder};
 use crate::domain::{DomainError, FileId};
@@ -19,7 +20,7 @@ fn to_py_err(err: DomainError) -> PyErr {
     PyRuntimeError::new_err(err.to_string())
 }
 
-/// A SeaweedFS file identifier.
+/// A `SeaweedFS` file identifier.
 #[pyclass(name = "FileId")]
 #[derive(Clone)]
 pub struct PyFileId {
@@ -72,7 +73,7 @@ impl PyFileId {
     }
 }
 
-/// SeaweedFS client for Python.
+/// `SeaweedFS` client for Python.
 #[pyclass(name = "WeedClient")]
 pub struct PyWeedClient {
     client: Arc<BlockingWeedClient>,
@@ -80,7 +81,7 @@ pub struct PyWeedClient {
 
 #[pymethods]
 impl PyWeedClient {
-    /// Create a new SeaweedFS client.
+    /// Create a new `SeaweedFS` client.
     #[new]
     #[pyo3(signature = (master_urls, strategy = "round_robin", max_retries = 3))]
     fn new(master_urls: Vec<String>, strategy: &str, max_retries: usize) -> PyResult<Self> {
@@ -107,7 +108,7 @@ impl PyWeedClient {
         })
     }
 
-    /// Write data to SeaweedFS.
+    /// Write data to `SeaweedFS`.
     #[pyo3(signature = (data, filename = None))]
     fn write(&self, data: &[u8], filename: Option<&str>) -> PyResult<PyFileId> {
         let file_id = self
@@ -117,28 +118,28 @@ impl PyWeedClient {
         Ok(PyFileId { inner: file_id })
     }
 
-    /// Alias for write() - upload bytes to SeaweedFS.
+    /// Alias for `write()` - upload bytes to `SeaweedFS`.
     #[pyo3(signature = (data, filename = None))]
     fn upload_bytes(&self, data: &[u8], filename: Option<&str>) -> PyResult<PyFileId> {
         self.write(data, filename)
     }
 
-    /// Read data from SeaweedFS.
+    /// Read data from `SeaweedFS`.
     fn read<'py>(&self, py: Python<'py>, file_id: PyFileIdOrStr) -> PyResult<Bound<'py, PyBytes>> {
-        let fid = file_id.to_file_id()?;
+        let fid = file_id.into_file_id()?;
         let data = self.client.read(&fid).map_err(to_py_err)?;
         Ok(PyBytes::new(py, &data))
     }
 
-    /// Delete a file from SeaweedFS.
+    /// Delete a file from `SeaweedFS`.
     fn delete(&self, file_id: PyFileIdOrStr) -> PyResult<()> {
-        let fid = file_id.to_file_id()?;
+        let fid = file_id.into_file_id()?;
         self.client.delete(&fid).map_err(to_py_err)
     }
 
     /// Get a public URL for a file.
     fn public_url(&self, file_id: PyFileIdOrStr) -> PyResult<String> {
-        let fid = file_id.to_file_id()?;
+        let fid = file_id.into_file_id()?;
         self.client.public_url(&fid).map_err(to_py_err)
     }
 
@@ -149,7 +150,7 @@ impl PyWeedClient {
         width: u32,
         height: u32,
     ) -> PyResult<String> {
-        let fid = file_id.to_file_id()?;
+        let fid = file_id.into_file_id()?;
         self.client
             .public_url_resized(&fid, width, height)
             .map_err(to_py_err)
@@ -162,7 +163,7 @@ impl PyWeedClient {
     }
 }
 
-/// Union type for accepting either FileId or string.
+/// Union type for accepting either `FileId` or string.
 #[derive(FromPyObject)]
 enum PyFileIdOrStr {
     FileId(PyFileId),
@@ -170,7 +171,7 @@ enum PyFileIdOrStr {
 }
 
 impl PyFileIdOrStr {
-    fn to_file_id(self) -> PyResult<FileId> {
+    fn into_file_id(self) -> PyResult<FileId> {
         match self {
             Self::FileId(py_fid) => Ok(py_fid.inner),
             Self::Str(s) => FileId::parse(&s).map_err(to_py_err),
@@ -184,7 +185,7 @@ pub fn weedforge(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyFileId>()?;
     m.add_class::<PyWeedClient>()?;
 
-    m.add("__doc__", "Rust-first, Python-friendly SDK for SeaweedFS")?;
+    m.add("__doc__", "Rust-first, Python-friendly SDK for `SeaweedFS`")?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
     Ok(())

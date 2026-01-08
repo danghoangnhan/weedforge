@@ -1,6 +1,6 @@
 //! Main client facade for weedforge.
 //!
-//! Provides both async and blocking APIs for SeaweedFS operations.
+//! Provides both async and blocking APIs for `SeaweedFS` operations.
 
 use std::sync::Arc;
 
@@ -123,7 +123,7 @@ impl WeedClientBuilder {
     }
 }
 
-/// Async client for SeaweedFS operations.
+/// Async client for `SeaweedFS` operations.
 #[derive(Clone)]
 pub struct WeedClient {
     master: Arc<HaMasterClient>,
@@ -137,7 +137,7 @@ impl WeedClient {
         WeedClientBuilder::new()
     }
 
-    /// Writes data to SeaweedFS and returns the file ID.
+    /// Writes data to `SeaweedFS` and returns the file ID.
     ///
     /// # Errors
     ///
@@ -163,7 +163,7 @@ impl WeedClient {
         use_case.execute(data, Some(options)).await
     }
 
-    /// Reads data from SeaweedFS.
+    /// Reads data from `SeaweedFS`.
     ///
     /// # Errors
     ///
@@ -189,7 +189,7 @@ impl WeedClient {
         Ok(result.data)
     }
 
-    /// Deletes a file from SeaweedFS.
+    /// Deletes a file from `SeaweedFS`.
     ///
     /// # Errors
     ///
@@ -248,7 +248,7 @@ impl WeedClient {
     }
 }
 
-/// Blocking client for SeaweedFS operations.
+/// Blocking client for `SeaweedFS` operations.
 pub struct BlockingWeedClient {
     client: WeedClient,
     runtime: tokio::runtime::Runtime,
@@ -261,7 +261,7 @@ impl BlockingWeedClient {
         WeedClientBuilder::new()
     }
 
-    /// Writes data to SeaweedFS and returns the file ID.
+    /// Writes data to `SeaweedFS` and returns the file ID.
     ///
     /// # Errors
     ///
@@ -284,7 +284,7 @@ impl BlockingWeedClient {
             .block_on(self.client.write_with_options(data, options))
     }
 
-    /// Reads data from SeaweedFS.
+    /// Reads data from `SeaweedFS`.
     ///
     /// # Errors
     ///
@@ -307,7 +307,7 @@ impl BlockingWeedClient {
             .block_on(self.client.read_with_options(file_id, options))
     }
 
-    /// Deletes a file from SeaweedFS.
+    /// Deletes a file from `SeaweedFS`.
     ///
     /// # Errors
     ///

@@ -21,17 +21,14 @@ pub struct HttpVolumeClient {
 }
 
 impl HttpVolumeClient {
+    /// Creates a new HTTP volume client.
     #[must_use]
     pub const fn new(client: Client) -> Self {
         Self { client }
     }
 
     fn build_file_url(base_url: &str, file_id: &FileId) -> String {
-        let base = if base_url.ends_with('/') {
-            &base_url[..base_url.len() - 1]
-        } else {
-            base_url
-        };
+        let base = base_url.strip_suffix('/').unwrap_or(base_url);
 
         let base = if !base.starts_with("http://") && !base.starts_with("https://") {
             format!("http://{base}")
