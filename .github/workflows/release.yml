@@ -22,13 +22,15 @@ jobs:
 
       - name: Bump patch version and publish
         run: |
-          NEW_VERSION=$(cargo pkgid | sed 's/.*#//' | awk -F. -v OFS=. '{$NF++; print}')
-          # Fetch currently published versions
-          EXISTING_VERSIONS=$(cargo search weedforge --limit 5 | grep -oP '"\K[0-9]+\.[0-9]+\.[0-9]+(?=")')
-          while echo "$EXISTING_VERSIONS" | grep -qx "$NEW_VERSION"; do
-            echo "Version $NEW_VERSION already exists on crates.io, incrementing..."
-            NEW_VERSION=$(echo $NEW_VERSION | awk -F. -v OFS=. '{$NF++; print}')
-          done
+          # Get the latest published version from crates.io API (more reliable than cargo search)
+          LATEST_VERSION=$(curl -s https://crates.io/api/v1/crates/weedforge | jq -r '.crate.max_version // "0.1.0"')
+          if [ "$LATEST_VERSION" = "null" ] || [ -z "$LATEST_VERSION" ]; then
+            LATEST_VERSION="0.1.0"
+          fi
+          echo "Latest version on crates.io: $LATEST_VERSION"
+
+          # Increment patch version from the latest published version
+          NEW_VERSION=$(echo "$LATEST_VERSION" | awk -F. -v OFS=. '{$NF++; print}')
           echo "Publishing version $NEW_VERSION"
           cargo set-version $NEW_VERSION
           cargo publish --allow-dirty
