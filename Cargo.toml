@@ -19,9 +19,8 @@ python = ["pyo3"]
 [dependencies]
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "multipart", "json"] }
-# Use aws-lc-rs instead of ring for better cross-compilation support
-rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+# reqwest 0.13+ uses aws-lc-rs by default, which has better cross-compilation support than ring
+reqwest = { version = "0.13", default-features = true, features = ["multipart", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.8"
