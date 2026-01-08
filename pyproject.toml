@@ -27,9 +27,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/weedforge"
-Repository = "https://github.com/your-org/weedforge"
-Documentation = "https://github.com/your-org/weedforge#readme"
+Homepage = "https://github.com/danghoangnhan/weedforge"
+Repository = "https://github.com/danghoangnhan/weedforge"
+Documentation = "https://github.com/danghoangnhan/weedforge#readme"
 
 [tool.maturin]
 features = ["python"]
