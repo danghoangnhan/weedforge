@@ -23,7 +23,12 @@ jobs:
       - name: Bump patch version and publish
         run: |
           NEW_VERSION=$(cargo pkgid | sed 's/.*#//' | awk -F. -v OFS=. '{$NF++; print}')
-          echo "Bumping version to $NEW_VERSION"
+          # Check if this version already exists on crates.io, keep incrementing if so
+          while cargo search weedforge --limit 1 | grep -q "\"$NEW_VERSION\""; do
+            echo "Version $NEW_VERSION already exists on crates.io, incrementing..."
+            NEW_VERSION=$(echo $NEW_VERSION | awk -F. -v OFS=. '{$NF++; print}')
+          done
+          echo "Publishing version $NEW_VERSION"
           cargo set-version $NEW_VERSION
           cargo publish --allow-dirty
         env:
@@ -39,6 +44,10 @@ jobs:
         target: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install aarch64 cross toolchain
+        if: matrix.target == 'aarch64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
