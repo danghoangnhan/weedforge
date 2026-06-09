@@ -1,8 +1,8 @@
 # Clippy configuration
 # https://doc.rust-lang.org/clippy/configuration.html
 
-# Minimum supported Rust version
-msrv = "1.75"
+# Minimum supported Rust version (gated by reqwest 0.13 -> icu 2.2.x; see Cargo.toml)
+msrv = "1.86"
 
 # Cognitive complexity threshold
 cognitive-complexity-threshold = 25

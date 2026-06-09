@@ -131,7 +131,7 @@ impl MasterPort for HaMasterClient {
         let mut last_error = DomainError::AllMastersUnavailable;
         let start_index = self.next_master_index();
 
-        for _ in 0..self.max_retries {
+        for _ in 0..self.max_retries.max(1) {
             for offset in 0..self.clients.len() {
                 let index = (start_index + offset) % self.clients.len();
                 let client = &self.clients[index];
@@ -156,7 +156,7 @@ impl MasterPort for HaMasterClient {
         let mut last_error = DomainError::AllMastersUnavailable;
         let start_index = self.next_master_index();
 
-        for _ in 0..self.max_retries {
+        for _ in 0..self.max_retries.max(1) {
             for offset in 0..self.clients.len() {
                 let index = (start_index + offset) % self.clients.len();
                 let client = &self.clients[index];
@@ -258,5 +258,37 @@ impl HaMasterClientBuilder {
         };
 
         Ok(HaMasterClient::new(http_client, config))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+    use super::*;
+    use crate::infrastructure::http::create_http_client;
+    use crate::infrastructure::HttpClientConfig;
+    use std::time::Duration;
+
+    #[tokio::test]
+    async fn max_retries_zero_still_attempts_once() {
+        // With the bug, max_retries == 0 makes the retry loop run zero times and returns
+        // AllMastersUnavailable without contacting any master. After the fix it makes one
+        // full pass, so a single unreachable master surfaces the connection failure.
+        let config = HttpClientConfig::default().with_connect_timeout(Duration::from_millis(200));
+        let http = create_http_client(&config).expect("client");
+        let client = HaMasterClientBuilder::new()
+            .master_url("http://127.0.0.1:1")
+            .max_retries(0)
+            .build(http)
+            .expect("ha client");
+
+        let err = client
+            .assign(None)
+            .await
+            .expect_err("should fail to connect");
+        assert!(
+            matches!(err, DomainError::AssignmentFailed { .. }),
+            "expected an attempted-connection error, got {err:?}"
+        );
     }
 }

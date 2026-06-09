@@ -2,14 +2,39 @@ name: Release
 
 on:
   release:
-      types: [published]
+    types: [published]
 
 permissions:
   contents: read
 
 jobs:
+  # Single source of truth: the version lives in Cargo.toml (pyproject reads it via
+  # `dynamic = ["version"]`). This job enforces that the committed version matches the
+  # release tag, so crates.io, the PyPI wheels, and the runtime __version__ all agree
+  # and every release is reproducible from its immutable tag.
+  check-version:
+    name: Check version matches tag
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: check
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CARGO_VER="$(grep -m1 '^version = ' Cargo.toml | sed -E 's/^version = "(.+)"/\1/')"
+          echo "Release tag:      $TAG"
+          echo "Cargo.toml version: $CARGO_VER"
+          if [ "$TAG" != "$CARGO_VER" ]; then
+            echo "::error::Release tag ($TAG) does not match Cargo.toml [package] version ($CARGO_VER). Bump the version in Cargo.toml, commit, then create the matching tag/release."
+            exit 1
+          fi
+          echo "version=$CARGO_VER" >> "$GITHUB_OUTPUT"
+
   publish-crates:
     name: Publish to crates.io
+    needs: check-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,30 +42,17 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo-set-version
-        run: cargo install cargo-set-version
-
-      - name: Bump patch version and publish
-        run: |
-          # Get the latest published version from crates.io API (more reliable than cargo search)
-          LATEST_VERSION=$(curl -s https://crates.io/api/v1/crates/weedforge | jq -r '.crate.max_version // "0.1.1"')
-          if [ "$LATEST_VERSION" = "null" ] || [ -z "$LATEST_VERSION" ]; then
-            LATEST_VERSION="0.1.1"
-          fi
-          echo "Latest version on crates.io: $LATEST_VERSION"
-
-          # Increment patch version from the latest published version
-          NEW_VERSION=$(echo "$LATEST_VERSION" | awk -F. -v OFS=. '{$NF++; print}')
-          echo "Publishing version $NEW_VERSION"
-          cargo set-version $NEW_VERSION
-          cargo publish --allow-dirty
+      - name: Publish
+        # Version is already committed in Cargo.toml (== tag, enforced above), so this is
+        # a clean, reproducible publish — no runtime version mutation, no crates.io API.
+        run: cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-
-  # Build wheels for Linux (manylinux)
+  # Build wheels for Linux (manylinux, x86_64)
   build-linux:
     name: Build Linux wheels
+    needs: check-version
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -56,11 +68,7 @@ jobs:
           manylinux: auto
           sccache: 'false'
           rust-toolchain: stable
-          # Use zig for cross-compilation - handles ring's ARM assembly correctly
-          zig: true
         env:
-          # Use generic ARMv8 architecture and define __ARM_ARCH for aws-lc-sys assembly
-          CFLAGS_aarch64_unknown_linux_gnu: "-march=armv8-a -D__ARM_ARCH=8"
           RUST_BACKTRACE: 1
 
       - name: Upload wheels
@@ -72,6 +80,7 @@ jobs:
   # Build wheels for macOS
   build-macos:
     name: Build macOS wheels
+    needs: check-version
     runs-on: macos-latest
     strategy:
       matrix:
@@ -94,6 +103,7 @@ jobs:
   # Build wheels for Windows
   build-windows:
     name: Build Windows wheels
+    needs: check-version
     runs-on: windows-latest
     strategy:
       matrix:
@@ -115,6 +125,7 @@ jobs:
   # Build source distribution
   build-sdist:
     name: Build source distribution
+    needs: check-version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -134,7 +145,7 @@ jobs:
   # Publish to PyPI
   publish-pypi:
     name: Publish to PyPI
-    needs: [build-linux, build-macos, build-windows, build-sdist]
+    needs: [check-version, build-linux, build-macos, build-windows, build-sdist]
     runs-on: ubuntu-latest
     steps:
       - name: Download wheels
