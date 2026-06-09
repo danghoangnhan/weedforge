@@ -46,7 +46,10 @@ impl FileId {
 
     /// Parses a file ID from a string.
     ///
-    /// The expected format is `{volume_id},{file_key}{cookie}`.
+    /// The expected format is `{volume_id},{hex}` where `hex` encodes the needle key
+    /// (up to 8 bytes) followed by the cookie (always 4 bytes / 8 hex chars), matching
+    /// `SeaweedFS`. The cookie is therefore the last 8 hex characters and the needle key
+    /// is the remaining prefix — a full 64-bit value, not 32-bit.
     ///
     /// # Errors
     ///
@@ -59,6 +62,12 @@ impl FileId {
                     reason: "missing comma separator".to_string(),
                 })?;
 
+        if volume_str.is_empty() || !volume_str.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(DomainError::InvalidFileId {
+                value: s.to_string(),
+                reason: "invalid volume ID".to_string(),
+            });
+        }
         let volume_id = volume_str
             .parse::<u32>()
             .map_err(|e| DomainError::InvalidFileId {
@@ -66,21 +75,34 @@ impl FileId {
                 reason: format!("invalid volume ID: {e}"),
             })?;
 
-        if key_cookie_str.len() < 8 {
+        // The cookie is the last 8 hex chars; the needle key is the prefix (<= 16 hex
+        // chars / 64 bits). `SeaweedFS` rejects a key/cookie string of 8 or fewer chars.
+        if key_cookie_str.len() <= 8 || key_cookie_str.len() > 24 {
             return Err(DomainError::InvalidFileId {
                 value: s.to_string(),
-                reason: "key/cookie hex string too short".to_string(),
+                reason: "key/cookie hex length out of range".to_string(),
+            });
+        }
+        if !key_cookie_str.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(DomainError::InvalidFileId {
+                value: s.to_string(),
+                reason: "non-hex character in key/cookie".to_string(),
             });
         }
 
-        let full_value =
-            u64::from_str_radix(key_cookie_str, 16).map_err(|e| DomainError::InvalidFileId {
-                value: s.to_string(),
-                reason: format!("invalid hex in key/cookie: {e}"),
-            })?;
+        let split = key_cookie_str.len() - 8;
+        let (key_hex, cookie_hex) = key_cookie_str.split_at(split);
 
-        let cookie = (full_value & 0xFFFF_FFFF) as u32;
-        let file_key = full_value >> 32;
+        let file_key =
+            u64::from_str_radix(key_hex, 16).map_err(|e| DomainError::InvalidFileId {
+                value: s.to_string(),
+                reason: format!("invalid needle key: {e}"),
+            })?;
+        let cookie =
+            u32::from_str_radix(cookie_hex, 16).map_err(|e| DomainError::InvalidFileId {
+                value: s.to_string(),
+                reason: format!("invalid cookie: {e}"),
+            })?;
 
         Ok(Self {
             volume_id,
@@ -89,11 +111,31 @@ impl FileId {
         })
     }
 
-    /// Renders the file ID as a string suitable for URLs.
+    /// Renders the file ID as its canonical `SeaweedFS` string form.
+    ///
+    /// The needle key (8 bytes) and cookie (4 bytes) are encoded big-endian with leading
+    /// zero bytes stripped, byte-stable with the server's own representation. Handles the
+    /// full 64-bit needle-key range with no truncation.
     #[must_use]
     pub fn render(&self) -> String {
-        let combined = (self.file_key << 32) | u64::from(self.cookie);
-        format!("{},{:016x}", self.volume_id, combined)
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+
+        let mut buf = [0u8; 12];
+        buf[0..8].copy_from_slice(&self.file_key.to_be_bytes());
+        buf[8..12].copy_from_slice(&self.cookie.to_be_bytes());
+
+        // Strip leading zero bytes, keeping at least the final byte.
+        let mut start = 0;
+        while start < buf.len() - 1 && buf[start] == 0 {
+            start += 1;
+        }
+
+        let mut hex = String::with_capacity((buf.len() - start) * 2);
+        for &byte in &buf[start..] {
+            hex.push(char::from(HEX[(byte >> 4) as usize]));
+            hex.push(char::from(HEX[(byte & 0x0f) as usize]));
+        }
+        format!("{},{hex}", self.volume_id)
     }
 }
 
@@ -113,7 +155,52 @@ impl FromStr for FileId {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
     use super::*;
+
+    #[test]
+    fn test_parse_canonical_roundtrip() {
+        let fid = FileId::parse("3,01637037d6").expect("valid fid");
+        assert_eq!(fid.volume_id(), 3);
+        assert_eq!(fid.file_key(), 1);
+        assert_eq!(fid.cookie(), 0x6370_37d6);
+        assert_eq!(fid.render(), "3,01637037d6");
+    }
+
+    #[test]
+    fn test_large_needle_key_roundtrips() {
+        // Needle key > 2^32 — previously rejected on parse and truncated on render.
+        let fid = FileId::new(7, 0x1_0000_0001, 0xDEAD_BEEF);
+        assert_eq!(fid.render(), "7,0100000001deadbeef");
+        let parsed = FileId::parse("7,0100000001deadbeef").expect("valid large fid");
+        assert_eq!(parsed, fid);
+    }
+
+    #[test]
+    fn test_max_needle_key() {
+        let fid = FileId::parse("1,ffffffffffffffffdeadbeef").expect("valid max fid");
+        assert_eq!(fid.file_key(), u64::MAX);
+        assert_eq!(fid.cookie(), 0xDEAD_BEEF);
+        assert_eq!(fid.render(), "1,ffffffffffffffffdeadbeef");
+    }
+
+    #[test]
+    fn test_render_canonicalizes_zero_padding() {
+        let fid = FileId::parse("3,0000016300007037").expect("valid");
+        assert_eq!(fid.render(), "3,016300007037");
+    }
+
+    #[test]
+    fn test_parse_rejects_plus_sign() {
+        assert!(FileId::parse("3,+123456789").is_err());
+        assert!(FileId::parse("+3,12345678ab").is_err());
+    }
+
+    #[test]
+    fn test_parse_rejects_out_of_range_lengths() {
+        assert!(FileId::parse("3,12345678").is_err()); // == 8, too short
+        assert!(FileId::parse("3,0000000000000000ffffffffff").is_err()); // > 24
+    }
 
     #[test]
     fn test_new_and_accessors() {

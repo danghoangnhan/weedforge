@@ -3,7 +3,7 @@
 //! This module provides functionality for constructing public URLs
 //! for `SeaweedFS` files, including support for image resize parameters.
 
-use crate::domain::{DomainError, DomainResult, FileId, LookupResult, MasterPort};
+use crate::domain::{DomainError, DomainResult, FileId, LookupResult, MasterPort, VolumeLocation};
 
 /// Image resize mode for public URLs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,26 +135,7 @@ where
             });
         }
 
-        let location = &lookup.locations[0];
-
-        let base_url = if opts.prefer_public {
-            location
-                .public_url
-                .as_ref()
-                .unwrap_or(&location.url)
-                .clone()
-        } else {
-            location.url.clone()
-        };
-
-        let fid_str = file_id.render();
-        let image_suffix = opts
-            .image_params
-            .as_ref()
-            .map(ImageParams::render)
-            .unwrap_or_default();
-
-        Ok(format!("{base_url}/{fid_str}{image_suffix}"))
+        Ok(assemble_url(&lookup.locations[0], file_id, &opts))
     }
 
     /// Builds a URL from a pre-fetched lookup result.
@@ -175,31 +156,75 @@ where
             });
         }
 
-        let location = &lookup.locations[0];
-        let base_url = if opts.prefer_public {
-            location
-                .public_url
-                .as_ref()
-                .unwrap_or(&location.url)
-                .clone()
-        } else {
-            location.url.clone()
-        };
-
-        let fid_str = file_id.render();
-        let image_suffix = opts
-            .image_params
-            .as_ref()
-            .map(ImageParams::render)
-            .unwrap_or_default();
-
-        Ok(format!("{base_url}/{fid_str}{image_suffix}"))
+        Ok(assemble_url(&lookup.locations[0], file_id, &opts))
     }
+}
+
+/// Assembles the final public URL from a chosen location, prepending `http://` when the
+/// location carries no scheme (`SeaweedFS` returns bare `host:port`). Shared by both the
+/// live-lookup and pre-fetched paths so the scheme handling cannot drift.
+fn assemble_url(location: &VolumeLocation, file_id: &FileId, opts: &PublicUrlOptions) -> String {
+    let base = if opts.prefer_public {
+        location
+            .public_url
+            .as_deref()
+            .unwrap_or(location.url.as_str())
+    } else {
+        location.url.as_str()
+    };
+    let base = base.strip_suffix('/').unwrap_or(base);
+    let with_scheme = if base.starts_with("http://") || base.starts_with("https://") {
+        base.to_string()
+    } else {
+        format!("http://{base}")
+    };
+
+    let fid_str = file_id.render();
+    let image_suffix = opts
+        .image_params
+        .as_ref()
+        .map(ImageParams::render)
+        .unwrap_or_default();
+
+    format!("{with_scheme}/{fid_str}{image_suffix}")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_assemble_url_prepends_scheme() {
+        let fid = FileId::new(3, 1, 0x6370_37d6);
+        let loc = VolumeLocation {
+            url: "127.0.0.1:8080".to_string(),
+            public_url: None,
+        };
+        let url = assemble_url(&loc, &fid, &PublicUrlOptions::default());
+        assert_eq!(url, "http://127.0.0.1:8080/3,01637037d6");
+    }
+
+    #[test]
+    fn test_assemble_url_prefers_public_keeps_https_and_appends_params() {
+        let fid = FileId::new(3, 1, 0x6370_37d6);
+        let loc = VolumeLocation {
+            url: "10.0.0.1:8080".to_string(),
+            public_url: Some("https://cdn.example.com/".to_string()),
+        };
+        let opts = PublicUrlOptions {
+            image_params: Some(ImageParams::dimensions(200, 100)),
+            prefer_public: true,
+        };
+        let url = assemble_url(&loc, &fid, &opts);
+        assert!(
+            url.starts_with("https://cdn.example.com/3,01637037d6"),
+            "got {url}"
+        );
+        assert!(
+            url.contains("width=200") && url.contains("height=100"),
+            "got {url}"
+        );
+    }
 
     #[test]
     fn test_image_params_width() {
