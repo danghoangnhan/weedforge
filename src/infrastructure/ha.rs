@@ -4,7 +4,7 @@ use crate::domain::{
     AssignOptions, AssignResult, DomainError, DomainResult, LookupResult, MasterPort,
 };
 use crate::infrastructure::http::HttpMasterClient;
-use rand::seq::SliceRandom;
+use rand::Rng;
 use reqwest::Client;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -105,11 +105,8 @@ impl HaMasterClient {
                 self.current_index.fetch_add(1, Ordering::Relaxed) % self.clients.len()
             }
             MasterSelectionStrategy::Failover => 0,
-            MasterSelectionStrategy::Random => {
-                let mut rng = rand::thread_rng();
-                let indices: Vec<usize> = (0..self.clients.len()).collect();
-                *indices.choose(&mut rng).unwrap_or(&0)
-            }
+            // `clients` is guaranteed non-empty, so the range is valid.
+            MasterSelectionStrategy::Random => rand::rng().random_range(0..self.clients.len()),
         }
     }
 
