@@ -1,10 +1,12 @@
 [package]
 name = "weedforge"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/danghoangnhan/weedforge"
-rust-version = "1.75"
+# MSRV is gated by the resolved dependency tree: reqwest 0.13 -> idna -> icu 2.1.x
+# declare rust-version 1.83. Verified with `cargo metadata` against Cargo.lock.
+rust-version = "1.83"
 description = "Rust-first, Python-friendly SDK for SeaweedFS"
 keywords = ["seaweedfs", "storage", "distributed", "s3", "blob"]
 categories = ["web-programming", "database"]

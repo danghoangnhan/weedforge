@@ -4,7 +4,9 @@ build-backend = "maturin"
 
 [project]
 name = "weedforge"
-version = "0.1.1"
+# Single source of truth: the version is read from Cargo.toml's [package] version by
+# maturin. Do not add a static `version` here — bump it in Cargo.toml instead.
+dynamic = ["version"]
 description = "Rust-first, Python-friendly SDK for SeaweedFS"
 readme = "README.md"
 license = { text = "MIT" }
@@ -14,7 +16,9 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
