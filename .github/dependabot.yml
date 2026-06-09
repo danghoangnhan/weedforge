@@ -8,6 +8,11 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+    ignore:
+      # The `@1.86` / `@stable` refs on dtolnay/rust-toolchain are Rust TOOLCHAIN
+      # selectors, not action versions. Dependabot must not "bump" them (it tried
+      # 1.86 -> 1.100, a nonexistent toolchain, which broke the MSRV job).
+      - dependency-name: "dtolnay/rust-toolchain"
 
   # Rust core.
   - package-ecosystem: cargo
