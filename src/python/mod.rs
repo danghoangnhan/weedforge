@@ -21,7 +21,9 @@ fn to_py_err(err: DomainError) -> PyErr {
 }
 
 /// A `SeaweedFS` file identifier.
-#[pyclass(name = "FileId")]
+// `from_py_object` keeps the derived `FromPyObject` (used by `PyFileIdOrStr`) now that
+// pyo3 0.28 makes it opt-in for `Clone` pyclasses.
+#[pyclass(name = "FileId", from_py_object)]
 #[derive(Clone)]
 pub struct PyFileId {
     inner: FileId,
