@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # Keep GitHub Actions current (and, once pinned to SHAs, keep the SHAs fresh).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Rust core.
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Go client.
+  - package-ecosystem: gomod
+    directory: /clients/go
+    schedule:
+      interval: weekly
+
+  # Java client.
+  - package-ecosystem: maven
+    directory: /clients/java
+    schedule:
+      interval: weekly
