@@ -19,6 +19,12 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # `rand` churns its API across major versions (0.8 -> 0.9 -> 0.10 each broke the
+      # build) for our single trivial use. Take patch/minor updates but bump majors
+      # deliberately, not on every release.
+      - dependency-name: "rand"
+        update-types: ["version-update:semver-major"]
 
   # Go client.
   - package-ecosystem: gomod

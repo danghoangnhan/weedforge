@@ -4,7 +4,7 @@ use crate::domain::{
     AssignOptions, AssignResult, DomainError, DomainResult, LookupResult, MasterPort,
 };
 use crate::infrastructure::http::HttpMasterClient;
-use rand::Rng;
+use rand::RngExt;
 use reqwest::Client;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
