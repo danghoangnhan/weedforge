@@ -212,7 +212,10 @@ jobs:
 
       - name: Rust integration tests
         # --ignored is the point: these are the tests that need a real server.
-        run: cargo test --all-features -- --ignored --nocapture
+        # Scoped to the integration target because `--ignored` is not limited to
+        # #[ignore] functions -- it also selects ```ignore doctests, so an
+        # unscoped run executes the front-page examples against this server.
+        run: cargo test --all-features --test integration -- --ignored --nocapture
 
       - name: Build and install the Python wheel
         run: |
