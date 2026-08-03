@@ -1,6 +1,13 @@
 [package]
 name = "weedforge"
-version = "0.1.1"
+# 0.2.0, not 0.1.2: this carries breaking changes.
+#   - ReplicaSelection::Random renamed to Sticky (it was never random), and a
+#     genuinely per-request Random added.
+#   - DomainError gained DeleteFailed and LookupFailed, so exhaustive matches
+#     over it no longer compile.
+#   - WriteOptions gained `rack`, so struct literals without ..Default::default()
+#     no longer compile.
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/danghoangnhan/weedforge"

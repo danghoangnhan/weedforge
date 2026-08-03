@@ -1,5 +1,5 @@
 {
-  "_comment": "Shared cross-language conformance vectors for FileId parse/render. Both the Go and Java clients run these. Encoding matches SeaweedFS exactly: the fid is {volumeId},{hex} where hex = the 12-byte big-endian buffer [needleId(8) | cookie(4)] with leading zero BYTES stripped. parse() splits the last 8 hex chars as the cookie and the remainder as the (up to 64-bit) needle key. render() is byte-stable with the server's canonical form.",
+  "_comment": "Shared cross-language conformance vectors for FileId parse/render. The Rust core (tests/conformance.rs) and the Go and Java clients all run these. Encoding matches SeaweedFS exactly: the fid is {volumeId},{hex} where hex = the 12-byte big-endian buffer [needleId(8) | cookie(4)] with leading zero BYTES stripped. parse() splits the last 8 hex chars as the cookie and the remainder as the (up to 64-bit) needle key. render() is byte-stable with the server's canonical form.",
   "valid": [
     {
       "input": "3,01637037d6",
@@ -15,7 +15,7 @@
       "file_key": "355",
       "cookie": 28727,
       "render": "3,016300007037",
-      "note": "non-canonical zero-padded input (what the buggy Rust render emitted) canonicalizes on render"
+      "note": "non-canonical zero-padded input canonicalizes on render"
     },
     {
       "input": "7,0100000001deadbeef",
@@ -23,7 +23,7 @@
       "file_key": "4294967297",
       "cookie": 3735928559,
       "render": "7,0100000001deadbeef",
-      "note": "needle key > 2^32 — the exact case the Rust core rejects/truncates; must round-trip losslessly"
+      "note": "needle key > 2^32 — must round-trip losslessly rather than truncate"
     },
     {
       "input": "1,ffffffffffffffffdeadbeef",
