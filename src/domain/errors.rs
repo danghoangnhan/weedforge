@@ -59,6 +59,31 @@ pub enum DomainError {
         reason: String,
     },
 
+    /// Deletion failed.
+    ///
+    /// Distinct from [`DomainError::DownloadFailed`], which delete used to
+    /// report: a failed delete and a failed read are different incidents and
+    /// were indistinguishable in logs and in `match` arms.
+    #[error("delete failed: {reason}")]
+    DeleteFailed {
+        /// The reason for the delete failure.
+        reason: String,
+    },
+
+    /// A volume lookup could not be completed.
+    ///
+    /// This means the master could not be reached or did not answer usefully.
+    /// It is deliberately NOT [`DomainError::VolumeNotFound`], which means the
+    /// master answered and said the volume does not exist -- a terminal result
+    /// that no amount of failing over to other masters can change.
+    #[error("lookup of volume {volume_id} failed: {reason}")]
+    LookupFailed {
+        /// The volume ID that was being looked up.
+        volume_id: u32,
+        /// The reason the lookup could not be completed.
+        reason: String,
+    },
+
     /// Invalid URL format.
     #[error("invalid URL: {reason}")]
     InvalidUrl {

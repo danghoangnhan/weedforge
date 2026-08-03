@@ -1,15 +1,22 @@
 name: Clients
 
+# src/** is in the trigger on purpose. The Go and Java clients are kept in parity
+# with the Rust core through clients/conformance/fileid_vectors.json, so the code
+# most likely to break conformance is the core itself -- and while this workflow
+# only watched clients/**, a change to src/domain/entities.rs could alter the
+# FileId wire format without ever running the tests that would catch it.
 on:
   push:
     branches: [main]
     paths:
       - 'clients/**'
+      - 'src/**'
       - '.github/workflows/clients.yml'
   pull_request:
     branches: [main]
     paths:
       - 'clients/**'
+      - 'src/**'
       - '.github/workflows/clients.yml'
 
 jobs:

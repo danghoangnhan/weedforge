@@ -15,12 +15,20 @@ use crate::infrastructure::{
 };
 
 /// Builder for creating `WeedClient` instances.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct WeedClientBuilder {
     master_urls: Vec<String>,
     strategy: MasterSelectionStrategy,
     max_retries: usize,
     http_config: HttpClientConfig,
+}
+
+// Hand-written rather than derived: the derive gives max_retries = 0, so
+// `default()` and `new()` disagreed about a field that governs failover.
+impl Default for WeedClientBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl WeedClientBuilder {
@@ -87,6 +95,9 @@ impl WeedClientBuilder {
             });
         }
 
+        // Captured before self is partially moved into the master builder below.
+        let max_download_bytes = self.http_config.max_download_bytes;
+
         let http_client =
             create_http_client(&self.http_config).map_err(|e| DomainError::ConfigurationError {
                 reason: format!("Failed to create HTTP client: {e}"),
@@ -98,7 +109,7 @@ impl WeedClientBuilder {
             .max_retries(self.max_retries)
             .build(http_client.clone())?;
 
-        let volume = HttpVolumeClient::new(http_client);
+        let volume = HttpVolumeClient::new(http_client).with_max_download_bytes(max_download_bytes);
 
         Ok(WeedClient {
             master: Arc::new(master),
@@ -206,7 +217,15 @@ impl WeedClient {
     /// Returns an error if the lookup fails.
     pub async fn public_url(&self, file_id: &FileId) -> DomainResult<String> {
         let builder = PublicUrlBuilder::new(self.master.as_ref());
-        builder.build(file_id, None).await
+        // prefer_public matches public_url_resized. These two disagreed: this
+        // one defaulted to prefer_public = false and returned the INTERNAL
+        // address, so the same file resolved to a different host depending on
+        // which method you called.
+        let options = PublicUrlOptions {
+            image_params: None,
+            prefer_public: true,
+        };
+        builder.build(file_id, Some(options)).await
     }
 
     /// Gets a public URL with image resize parameters.

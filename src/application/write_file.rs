@@ -13,6 +13,12 @@ pub struct WriteOptions {
     pub replication: Option<String>,
     /// Optional data center preference.
     pub data_center: Option<String>,
+    /// Optional rack preference within the data center.
+    ///
+    /// `AssignOptions` has always carried a rack, but nothing ever put it on
+    /// the wire and `WriteOptions` had no field for it, so rack-targeted
+    /// placement was unreachable from the public API.
+    pub rack: Option<String>,
     /// Optional collection name.
     pub collection: Option<String>,
     /// Optional time-to-live for the file.
@@ -81,9 +87,9 @@ where
         let assign_options = AssignOptions {
             replication: opts.replication.clone(),
             data_center: opts.data_center.clone(),
+            rack: opts.rack.clone(),
             collection: opts.collection.clone(),
             ttl: opts.ttl.clone(),
-            ..Default::default()
         };
 
         let assignment = self.master.assign(Some(assign_options)).await?;

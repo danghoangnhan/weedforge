@@ -1,6 +1,13 @@
 [package]
 name = "weedforge"
-version = "0.1.1"
+# 0.2.0, not 0.1.2: this carries breaking changes.
+#   - ReplicaSelection::Random renamed to Sticky (it was never random), and a
+#     genuinely per-request Random added.
+#   - DomainError gained DeleteFailed and LookupFailed, so exhaustive matches
+#     over it no longer compile.
+#   - WriteOptions gained `rack`, so struct literals without ..Default::default()
+#     no longer compile.
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/danghoangnhan/weedforge"
@@ -23,7 +30,11 @@ python = ["pyo3"]
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync"] }
 # reqwest 0.13+ uses aws-lc-rs by default, which has better cross-compilation support than ring
-reqwest = { version = "0.13", default-features = true, features = ["multipart", "json"] }
+# "query" gates RequestBuilder::query (it pulls serde_urlencoded). Without it
+# the master client has to concatenate the /dir/assign query string by hand,
+# which is how an unencoded collection or ttl value could inject its own
+# parameters -- see src/infrastructure/http/master.rs.
+reqwest = { version = "0.13", default-features = true, features = ["multipart", "json", "query"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rand = "0.10"

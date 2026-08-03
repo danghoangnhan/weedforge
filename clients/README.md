@@ -16,27 +16,40 @@ clients/
 
 ## Parity is enforced, not assumed
 
-Both clients run the **same** golden vectors in `conformance/fileid_vectors.json`. The
-`FileId` codec is implemented to SeaweedFS's exact wire format:
+**All three** implementations run the same golden vectors in
+`conformance/fileid_vectors.json` — Go and Java from their own test suites, Rust from
+`tests/conformance.rs`. Until that Rust test existed the claim in this heading was not
+quite true: the reference implementation the other two are kept in parity *with* was the
+one nothing checked against the shared file.
+
+The `FileId` codec is implemented to SeaweedFS's exact wire format:
 
 > fid = `{volumeId},{hex}` where `hex` is the 12-byte big-endian buffer
 > `[needleKey(8) | cookie(4)]` with leading zero **bytes** stripped. `parse()` takes the
 > last 8 hex chars as the cookie and the remaining prefix as the (up to 64-bit) needle key.
 
 This is **correct for the full 64-bit needle-key range** and **byte-stable** with the
-server — it deliberately does *not* reproduce the Rust core's current bugs:
+server.
 
-| Rust core bug (see review) | Fixed here |
+### Divergences, and where they stand
+
+These clients were written ahead of the Rust core on six points. All six have since been
+fixed upstream, so the table below is history rather than a warning:
+
+| Former Rust core bug | Resolution |
 |---|---|
-| `FileId` packs key+cookie into one u64, rejects/truncates keys > 2³² | full 64-bit key, round-trips losslessly |
-| `public_url()` omits the URL scheme | volume/public URLs get `http://` prepended when scheme-less |
-| `max_retries = 0` (via `Default`) never contacts a master | retries clamped to ≥ 1 full pass |
-| `/dir/assign` params not URL-encoded | percent-encoded via `url.Values` / `URLEncoder` |
-| unbounded download body read (DoS) | optional `MaxDownloadBytes` cap |
-| delete errors mislabeled `DownloadFailed` | dedicated `DeleteFailed` |
+| `FileId` packed key+cookie into one u64, rejecting/truncating keys > 2³² | fixed in the core; full 64-bit key everywhere |
+| `public_url()` omitted the URL scheme | fixed in the core; `http://` prepended when scheme-less |
+| `max_retries = 0` (via `Default`) never contacted a master | fixed in the core; retries clamp to ≥ 1 full pass, and `Default` now equals `new()` |
+| `/dir/assign` params not URL-encoded | fixed in the core via reqwest's `query()`; `url.Values` / `URLEncoder` here |
+| unbounded download body read (DoS) | fixed in the core via `HttpClientConfig::max_download_bytes`; `MaxDownloadBytes` here |
+| delete errors mislabeled `DownloadFailed` | fixed in the core with a dedicated `DeleteFailed` |
 
-> Note: the upstream Rust core still has these bugs. Fix them there too so the reference
-> and the clients converge (see the code-review report).
+**The core is now ahead of these clients on one point:** a read resolves to a single
+replica here, and does not fall back to another when that server is unreachable. The Rust
+core tries every replica the master returned. Under a rack-aware replication code such as
+`010` that is the difference between surviving the loss of a storage node and not, so it
+is the next thing to port in this direction.
 
 ## Go
 
@@ -60,7 +73,7 @@ The HTTP seam is the `Doer` interface (`*http.Client` satisfies it); inject a fa
 
 ```bash
 cd clients/java
-mvn test          # requires a JDK + Maven (not available in this sandbox)
+mvn test
 ```
 
 ```java
@@ -78,8 +91,13 @@ JDK 8 constraints honored: no records/`var`, unsigned values via `Long.parseUnsi
 
 ## Status
 
-- **Go**: compiles, `go vet`/`gofmt` clean, all tests pass, cross-compiles to
-  linux/arm64, windows/amd64, darwin/arm64 with `CGO_ENABLED=0`.
-- **Java**: written to JDK 8; **not yet compiled in CI** (no JVM in the authoring
-  environment). Run `mvn test` to verify; the shared conformance vectors guarantee
-  `FileId` parity with the Go reference.
+Both are built and tested by `.github/workflows/clients.yml`, which also triggers on
+`src/**` — the core is where a conformance-breaking change is most likely to originate.
+
+- **Go**: `go vet`/`gofmt` clean, all tests pass, cross-compiles to linux/amd64,
+  linux/arm64, windows/amd64 and darwin/arm64 with `CGO_ENABLED=0`.
+- **Java**: built and tested on JDK 8, 11 and 17 (`mvn -B -ntp verify`). The shared
+  conformance vectors hold `FileId` in parity with Go and with the Rust core.
+
+Neither client has been exercised against a live SeaweedFS server; only the Rust and
+Python surfaces are, by the `integration` job in `.github/workflows/ci.yml`.

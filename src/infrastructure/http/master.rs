@@ -58,36 +58,41 @@ impl HttpMasterClient {
     }
 
     async fn assign_impl(&self, options: Option<AssignOptions>) -> DomainResult<AssignResult> {
-        let mut url = format!("{}/dir/assign", self.base_url);
+        let url = format!("{}/dir/assign", self.base_url);
         let opts = options.unwrap_or_default();
 
-        let mut params = Vec::new();
+        let mut params: Vec<(&str, &str)> = Vec::new();
         if let Some(ref replication) = opts.replication {
-            params.push(format!("replication={replication}"));
+            params.push(("replication", replication.as_str()));
         }
         if let Some(ref dc) = opts.data_center {
-            params.push(format!("dataCenter={dc}"));
+            params.push(("dataCenter", dc.as_str()));
+        }
+        // Previously dropped on the floor: AssignOptions carried a rack and
+        // nothing ever sent it, so rack-targeted placement silently did nothing.
+        if let Some(ref rack) = opts.rack {
+            params.push(("rack", rack.as_str()));
         }
         if let Some(ref ttl) = opts.ttl {
-            params.push(format!("ttl={ttl}"));
+            params.push(("ttl", ttl.as_str()));
         }
         if let Some(ref collection) = opts.collection {
-            params.push(format!("collection={collection}"));
+            params.push(("collection", collection.as_str()));
         }
 
-        if !params.is_empty() {
-            url.push('?');
-            url.push_str(&params.join("&"));
-        }
-
-        let response =
-            self.client
-                .get(&url)
-                .send()
-                .await
-                .map_err(|e| DomainError::AssignmentFailed {
-                    reason: format!("HTTP request failed: {e}"),
-                })?;
+        let response = self
+            .client
+            .get(&url)
+            // Percent-encoded by reqwest. Concatenating these by hand let a
+            // value containing '&' or '=' inject its own parameters -- a
+            // collection of "logs&replication=000" quietly turned a replicated
+            // write into an unreplicated one.
+            .query(&params)
+            .send()
+            .await
+            .map_err(|e| DomainError::AssignmentFailed {
+                reason: format!("HTTP request failed: {e}"),
+            })?;
 
         if !response.status().is_success() {
             return Err(DomainError::AssignmentFailed {
@@ -118,23 +123,38 @@ impl HttpMasterClient {
     }
 
     async fn lookup_impl(&self, volume_id: u32) -> DomainResult<LookupResult> {
-        let url = format!("{}/dir/lookup?volumeId={}", self.base_url, volume_id);
+        let url = format!("{}/dir/lookup", self.base_url);
 
+        // Every failure below used to collapse into VolumeNotFound. The HA layer
+        // reads that as "this master is broken", so one genuinely missing volume
+        // cost a full retry sweep and marked all three healthy masters failed.
+        // Only the master's own error field means the volume is really absent.
         let response = self
             .client
             .get(&url)
+            .query(&[("volumeId", volume_id)])
             .send()
             .await
-            .map_err(|_| DomainError::VolumeNotFound { volume_id })?;
+            .map_err(|e| DomainError::LookupFailed {
+                volume_id,
+                reason: format!("HTTP request failed: {e}"),
+            })?;
 
         if !response.status().is_success() {
-            return Err(DomainError::VolumeNotFound { volume_id });
+            return Err(DomainError::LookupFailed {
+                volume_id,
+                reason: format!("HTTP status: {}", response.status()),
+            });
         }
 
-        let lookup_resp: LookupResponse = response
-            .json()
-            .await
-            .map_err(|_| DomainError::VolumeNotFound { volume_id })?;
+        let lookup_resp: LookupResponse =
+            response
+                .json()
+                .await
+                .map_err(|e| DomainError::LookupFailed {
+                    volume_id,
+                    reason: format!("Failed to parse response: {e}"),
+                })?;
 
         if lookup_resp.error.is_some() {
             return Err(DomainError::VolumeNotFound { volume_id });

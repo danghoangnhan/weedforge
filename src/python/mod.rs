@@ -12,7 +12,7 @@ use crate::domain::{DomainError, FileId};
 use crate::infrastructure::MasterSelectionStrategy;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
+use pyo3::types::{PyBytes, PyDict, PyList};
 use std::sync::Arc;
 
 /// Convert a domain error to a Python exception.
@@ -112,50 +112,83 @@ impl PyWeedClient {
 
     /// Write data to `SeaweedFS`.
     #[pyo3(signature = (data, filename = None))]
-    fn write(&self, data: &[u8], filename: Option<&str>) -> PyResult<PyFileId> {
-        let file_id = self
-            .client
-            .write(data.to_vec(), filename)
+    fn write(&self, py: Python<'_>, data: &[u8], filename: Option<&str>) -> PyResult<PyFileId> {
+        let data = data.to_vec();
+        let filename = filename.map(str::to_owned);
+        let client = Arc::clone(&self.client);
+        let file_id = py
+            .detach(move || client.write(data, filename.as_deref()))
             .map_err(to_py_err)?;
         Ok(PyFileId { inner: file_id })
     }
 
     /// Alias for `write()` - upload bytes to `SeaweedFS`.
     #[pyo3(signature = (data, filename = None))]
-    fn upload_bytes(&self, data: &[u8], filename: Option<&str>) -> PyResult<PyFileId> {
-        self.write(data, filename)
+    fn upload_bytes(
+        &self,
+        py: Python<'_>,
+        data: &[u8],
+        filename: Option<&str>,
+    ) -> PyResult<PyFileId> {
+        self.write(py, data, filename)
     }
 
     /// Read data from `SeaweedFS`.
     fn read<'py>(&self, py: Python<'py>, file_id: PyFileIdOrStr) -> PyResult<Bound<'py, PyBytes>> {
         let fid = file_id.into_file_id()?;
-        let data = self.client.read(&fid).map_err(to_py_err)?;
+        let client = Arc::clone(&self.client);
+        let data = py.detach(move || client.read(&fid)).map_err(to_py_err)?;
         Ok(PyBytes::new(py, &data))
     }
 
     /// Delete a file from `SeaweedFS`.
-    fn delete(&self, file_id: PyFileIdOrStr) -> PyResult<()> {
+    fn delete(&self, py: Python<'_>, file_id: PyFileIdOrStr) -> PyResult<()> {
         let fid = file_id.into_file_id()?;
-        self.client.delete(&fid).map_err(to_py_err)
+        let client = Arc::clone(&self.client);
+        py.detach(move || client.delete(&fid)).map_err(to_py_err)
     }
 
     /// Get a public URL for a file.
-    fn public_url(&self, file_id: PyFileIdOrStr) -> PyResult<String> {
+    fn public_url(&self, py: Python<'_>, file_id: PyFileIdOrStr) -> PyResult<String> {
         let fid = file_id.into_file_id()?;
-        self.client.public_url(&fid).map_err(to_py_err)
+        let client = Arc::clone(&self.client);
+        py.detach(move || client.public_url(&fid))
+            .map_err(to_py_err)
     }
 
     /// Get a public URL with image resize parameters.
     fn public_url_resized(
         &self,
+        py: Python<'_>,
         file_id: PyFileIdOrStr,
         width: u32,
         height: u32,
     ) -> PyResult<String> {
         let fid = file_id.into_file_id()?;
-        self.client
-            .public_url_resized(&fid, width, height)
+        let client = Arc::clone(&self.client);
+        py.detach(move || client.public_url_resized(&fid, width, height))
             .map_err(to_py_err)
+    }
+
+    /// Look up the replica locations for a file id.
+    ///
+    /// Returns one dict per replica, with `url` and `public_url` keys. This is
+    /// how a caller checks that replication actually placed the copies it asked
+    /// for -- the Rust API has always had it, and Python simply could not reach
+    /// it.
+    fn lookup<'py>(&self, py: Python<'py>, file_id: PyFileIdOrStr) -> PyResult<Bound<'py, PyList>> {
+        let fid = file_id.into_file_id()?;
+        let client = Arc::clone(&self.client);
+        let result = py.detach(move || client.lookup(&fid)).map_err(to_py_err)?;
+
+        let locations = PyList::empty(py);
+        for location in result.locations {
+            let entry = PyDict::new(py);
+            entry.set_item("url", location.url)?;
+            entry.set_item("public_url", location.public_url)?;
+            locations.append(entry)?;
+        }
+        Ok(locations)
     }
 
     /// Parse a file ID string.

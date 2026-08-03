@@ -11,7 +11,11 @@
 //!
 //! ## Quick Start
 //!
-//! ```ignore
+//! `no_run` rather than `ignore`: these need a live `SeaweedFS` to execute, but
+//! they are still compiled and linked, so an API change that invalidates them
+//! breaks the build instead of quietly leaving the front page wrong.
+//!
+//! ```no_run
 //! use weedforge::WeedClient;
 //!
 //! #[tokio::main]
@@ -39,16 +43,21 @@
 //!
 //! ## Blocking API
 //!
-//! ```ignore
+//! ```no_run
 //! use weedforge::BlockingWeedClient;
 //!
 //! fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // build_blocking(), not build(): build() hands back an async WeedClient,
+//!     // so every call below would return a Future and none of the `?` compile.
 //!     let client = BlockingWeedClient::builder()
 //!         .master_url("http://localhost:9333")
-//!         .build()?;
+//!         .build_blocking()?;
 //!
 //!     let file_id = client.write(b"Hello!".to_vec(), Some("hello.txt"))?;
+//!     println!("Uploaded: {file_id}");
+//!
 //!     let data = client.read(&file_id)?;
+//!     println!("Downloaded: {} bytes", data.len());
 //!
 //!     Ok(())
 //! }

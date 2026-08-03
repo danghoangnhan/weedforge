@@ -7,8 +7,6 @@ use crate::infrastructure::http::HttpMasterClient;
 use rand::RngExt;
 use reqwest::Client;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 /// Strategy for selecting which master to use.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -70,7 +68,6 @@ pub struct HaMasterClient {
     strategy: MasterSelectionStrategy,
     max_retries: usize,
     current_index: AtomicUsize,
-    failed_masters: Arc<RwLock<Vec<usize>>>,
 }
 
 impl HaMasterClient {
@@ -89,7 +86,6 @@ impl HaMasterClient {
             strategy: config.strategy,
             max_retries: config.max_retries,
             current_index: AtomicUsize::new(0),
-            failed_masters: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -109,18 +105,6 @@ impl HaMasterClient {
             MasterSelectionStrategy::Random => rand::rng().random_range(0..self.clients.len()),
         }
     }
-
-    async fn mark_success(&self, index: usize) {
-        let mut failed = self.failed_masters.write().await;
-        failed.retain(|&i| i != index);
-    }
-
-    async fn mark_failed(&self, index: usize) {
-        let mut failed = self.failed_masters.write().await;
-        if !failed.contains(&index) {
-            failed.push(index);
-        }
-    }
 }
 
 impl MasterPort for HaMasterClient {
@@ -134,14 +118,8 @@ impl MasterPort for HaMasterClient {
                 let client = &self.clients[index];
 
                 match client.assign(options.clone()).await {
-                    Ok(result) => {
-                        self.mark_success(index).await;
-                        return Ok(result);
-                    }
-                    Err(e) => {
-                        last_error = e;
-                        self.mark_failed(index).await;
-                    }
+                    Ok(result) => return Ok(result),
+                    Err(e) => last_error = e,
                 }
             }
         }
@@ -159,14 +137,14 @@ impl MasterPort for HaMasterClient {
                 let client = &self.clients[index];
 
                 match client.lookup(volume_id).await {
-                    Ok(result) => {
-                        self.mark_success(index).await;
-                        return Ok(result);
-                    }
-                    Err(e) => {
-                        last_error = e;
-                        self.mark_failed(index).await;
-                    }
+                    Ok(result) => return Ok(result),
+                    // The master answered and said the volume does not exist.
+                    // Every other master shares one raft-replicated topology, so
+                    // asking them cannot produce a different answer -- it just
+                    // costs max_retries * masters requests to reach the same
+                    // conclusion.
+                    Err(e @ DomainError::VolumeNotFound { .. }) => return Err(e),
+                    Err(e) => last_error = e,
                 }
             }
         }
@@ -186,11 +164,19 @@ impl MasterPort for &HaMasterClient {
 }
 
 /// Builder for creating HA master clients.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct HaMasterClientBuilder {
     master_urls: Vec<String>,
     strategy: MasterSelectionStrategy,
     max_retries: usize,
+}
+
+// Hand-written rather than derived: the derive gives max_retries = 0, so
+// `default()` and `new()` disagreed about a field that governs failover.
+impl Default for HaMasterClientBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HaMasterClientBuilder {
