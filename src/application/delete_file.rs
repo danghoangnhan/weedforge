@@ -20,9 +20,15 @@ where
 
     /// Executes the delete file use case.
     ///
+    /// Tries each replica in turn. `SeaweedFS` propagates a delete to a volume's
+    /// peers, so reaching any one of them is enough -- but reaching the *first*
+    /// one is not guaranteed, and the previous implementation gave up when the
+    /// server holding `locations[0]` was down.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the file lookup fails or the deletion fails.
+    /// Returns an error if the file lookup fails, the volume has no replicas,
+    /// the object does not exist, or every replica failed to delete it.
     pub async fn execute(&self, file_id: &FileId) -> DomainResult<()> {
         let lookup = self.master.lookup(file_id.volume_id()).await?;
 
@@ -32,7 +38,19 @@ where
             });
         }
 
-        let location = &lookup.locations[0];
-        self.volume.delete(&location.url, file_id).await
+        let mut last_error = None;
+        for location in &lookup.locations {
+            match self.volume.delete(&location.url, file_id).await {
+                Ok(()) => return Ok(()),
+                // A replica that answered 404 has told us the object is gone.
+                // That is an answer, not a transport failure.
+                Err(e @ DomainError::FileNotFound { .. }) => return Err(e),
+                Err(e) => last_error = Some(e),
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| DomainError::NoReplicasAvailable {
+            volume_id: file_id.volume_id(),
+        }))
     }
 }
