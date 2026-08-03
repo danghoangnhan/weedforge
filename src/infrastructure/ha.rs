@@ -105,7 +105,6 @@ impl HaMasterClient {
             MasterSelectionStrategy::Random => rand::rng().random_range(0..self.clients.len()),
         }
     }
-
 }
 
 impl MasterPort for HaMasterClient {

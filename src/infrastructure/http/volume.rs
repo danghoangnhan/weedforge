@@ -146,17 +146,16 @@ impl HttpVolumeClient {
         // Streamed rather than buffered whole, so a server that lies about (or
         // omits) Content-Length still cannot force an unbounded allocation.
         let mut buffer: Vec<u8> = Vec::new();
-        while let Some(chunk) =
-            response
-                .chunk()
-                .await
-                .map_err(|e| DomainError::DownloadFailed {
-                    reason: format!("Failed to read response body: {e}"),
-                })?
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|e| DomainError::DownloadFailed {
+                reason: format!("Failed to read response body: {e}"),
+            })?
         {
             if let Some(limit) = self.max_download_bytes {
-                let total = u64::try_from(buffer.len().saturating_add(chunk.len()))
-                    .unwrap_or(u64::MAX);
+                let total =
+                    u64::try_from(buffer.len().saturating_add(chunk.len())).unwrap_or(u64::MAX);
                 if total > limit {
                     return Err(DomainError::DownloadFailed {
                         reason: format!("body exceeded the {limit} byte limit"),

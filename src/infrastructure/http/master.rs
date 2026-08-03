@@ -148,10 +148,13 @@ impl HttpMasterClient {
         }
 
         let lookup_resp: LookupResponse =
-            response.json().await.map_err(|e| DomainError::LookupFailed {
-                volume_id,
-                reason: format!("Failed to parse response: {e}"),
-            })?;
+            response
+                .json()
+                .await
+                .map_err(|e| DomainError::LookupFailed {
+                    volume_id,
+                    reason: format!("Failed to parse response: {e}"),
+                })?;
 
         if lookup_resp.error.is_some() {
             return Err(DomainError::VolumeNotFound { volume_id });

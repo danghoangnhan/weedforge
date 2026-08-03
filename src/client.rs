@@ -109,8 +109,7 @@ impl WeedClientBuilder {
             .max_retries(self.max_retries)
             .build(http_client.clone())?;
 
-        let volume =
-            HttpVolumeClient::new(http_client).with_max_download_bytes(max_download_bytes);
+        let volume = HttpVolumeClient::new(http_client).with_max_download_bytes(max_download_bytes);
 
         Ok(WeedClient {
             master: Arc::new(master),

@@ -145,7 +145,12 @@ jobs:
     env:
       # Pinned deliberately. A floating tag means a red pipeline cannot be told
       # apart from an upstream change.
-      SEAWEEDFS_IMAGE: ghcr.io/seaweedfs/seaweedfs:4.22.0
+      #
+      # Docker Hub, and a TWO-component tag. ghcr.io/seaweedfs/seaweedfs is the
+      # OCI repository for the Helm chart, and its three-component X.Y.Z tags are
+      # chart artifacts -- pulling one as a container image fails with
+      # "unsupported media type application/vnd.cncf.helm.config.v1+json".
+      SEAWEEDFS_IMAGE: chrislusf/seaweedfs:4.22
       SEAWEEDFS_MASTER: http://127.0.0.1:9333
     steps:
       - uses: actions/checkout@v7
@@ -214,7 +219,9 @@ jobs:
 
       - name: SeaweedFS logs on failure
         if: failure()
-        run: docker logs seaweedfs
+        # Tolerated: if the failure was the container never starting, this step
+        # erroring too would bury the message that actually explains why.
+        run: docker logs seaweedfs || true
 
       - name: Tear down
         if: always()

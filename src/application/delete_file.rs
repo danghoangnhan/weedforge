@@ -49,8 +49,10 @@ where
             }
         }
 
-        Err(last_error.unwrap_or_else(|| DomainError::NoReplicasAvailable {
-            volume_id: file_id.volume_id(),
-        }))
+        Err(
+            last_error.unwrap_or_else(|| DomainError::NoReplicasAvailable {
+                volume_id: file_id.volume_id(),
+            }),
+        )
     }
 }

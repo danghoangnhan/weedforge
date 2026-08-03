@@ -137,9 +137,7 @@ impl PyWeedClient {
     fn read<'py>(&self, py: Python<'py>, file_id: PyFileIdOrStr) -> PyResult<Bound<'py, PyBytes>> {
         let fid = file_id.into_file_id()?;
         let client = Arc::clone(&self.client);
-        let data = py
-            .detach(move || client.read(&fid))
-            .map_err(to_py_err)?;
+        let data = py.detach(move || client.read(&fid)).map_err(to_py_err)?;
         Ok(PyBytes::new(py, &data))
     }
 
@@ -147,8 +145,7 @@ impl PyWeedClient {
     fn delete(&self, py: Python<'_>, file_id: PyFileIdOrStr) -> PyResult<()> {
         let fid = file_id.into_file_id()?;
         let client = Arc::clone(&self.client);
-        py.detach(move || client.delete(&fid))
-            .map_err(to_py_err)
+        py.detach(move || client.delete(&fid)).map_err(to_py_err)
     }
 
     /// Get a public URL for a file.
@@ -179,16 +176,10 @@ impl PyWeedClient {
     /// how a caller checks that replication actually placed the copies it asked
     /// for -- the Rust API has always had it, and Python simply could not reach
     /// it.
-    fn lookup<'py>(
-        &self,
-        py: Python<'py>,
-        file_id: PyFileIdOrStr,
-    ) -> PyResult<Bound<'py, PyList>> {
+    fn lookup<'py>(&self, py: Python<'py>, file_id: PyFileIdOrStr) -> PyResult<Bound<'py, PyList>> {
         let fid = file_id.into_file_id()?;
         let client = Arc::clone(&self.client);
-        let result = py
-            .detach(move || client.lookup(&fid))
-            .map_err(to_py_err)?;
+        let result = py.detach(move || client.lookup(&fid)).map_err(to_py_err)?;
 
         let locations = PyList::empty(py);
         for location in result.locations {

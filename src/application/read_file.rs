@@ -115,9 +115,11 @@ where
                 lookup,
                 source_url,
             }),
-            None => Err(last_error.unwrap_or_else(|| DomainError::NoReplicasAvailable {
-                volume_id: file_id.volume_id(),
-            })),
+            None => Err(
+                last_error.unwrap_or_else(|| DomainError::NoReplicasAvailable {
+                    volume_id: file_id.volume_id(),
+                }),
+            ),
         }
     }
 
