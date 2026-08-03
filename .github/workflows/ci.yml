@@ -133,6 +133,93 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  integration:
+    # Until this job existed, nothing in CI ever spoke to a SeaweedFS server.
+    # tests/integration.rs gates its real test behind #[ignore] + SEAWEEDFS_MASTER
+    # and tests/python_test.py skips on the same variable, and no workflow set it
+    # -- so `cargo test` ran unit tests only and the whole reason the crate
+    # exists (assign -> upload -> lookup -> download -> delete) was unverified on
+    # every release to crates.io and PyPI.
+    name: Integration (real SeaweedFS)
+    runs-on: ubuntu-latest
+    env:
+      # Pinned deliberately. A floating tag means a red pipeline cannot be told
+      # apart from an upstream change.
+      SEAWEEDFS_IMAGE: ghcr.io/seaweedfs/seaweedfs:4.22.0
+      SEAWEEDFS_MASTER: http://127.0.0.1:9333
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Start SeaweedFS
+        # -ip=127.0.0.1 matters more than it looks: the master hands clients
+        # whatever address the volume server reported, so anything else here
+        # returns a name the runner cannot resolve and every read fails in a way
+        # that looks like a client bug.
+        run: |
+          set -euxo pipefail
+          docker run -d --name seaweedfs \
+            -p 9333:9333 -p 8080:8080 \
+            "$SEAWEEDFS_IMAGE" \
+            server -ip=127.0.0.1 -dir=/data -master.volumeSizeLimitMB=100
+
+      - name: Wait until it can actually assign a file id
+        # Polling /dir/assign rather than the port: the master answers HTTP well
+        # before a volume server has registered, and an assign is exactly what
+        # the tests need to work.
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            if curl -fsS "$SEAWEEDFS_MASTER/dir/assign" | grep -q '"fid"'; then
+              echo "ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "SeaweedFS never became ready" >&2
+          docker logs seaweedfs
+          exit 1
+
+      - name: Rust integration tests
+        # --ignored is the point: these are the tests that need a real server.
+        run: cargo test --all-features -- --ignored --nocapture
+
+      - name: Build and install the Python wheel
+        run: |
+          set -euxo pipefail
+          pip install maturin pytest
+          maturin build --release --features python --out dist
+          pip install --no-index --find-links dist weedforge
+
+      - name: Python integration tests
+        run: pytest tests/python_test.py -v
+
+      - name: SeaweedFS logs on failure
+        if: failure()
+        run: docker logs seaweedfs
+
+      - name: Tear down
+        if: always()
+        run: docker rm -f seaweedfs || true
+
   python:
     name: Python Build
     runs-on: ubuntu-latest
