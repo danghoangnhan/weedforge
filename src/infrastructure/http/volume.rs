@@ -18,13 +18,24 @@ struct UploadResponse {
 #[derive(Debug, Clone)]
 pub struct HttpVolumeClient {
     client: Client,
+    max_download_bytes: Option<u64>,
 }
 
 impl HttpVolumeClient {
-    /// Creates a new HTTP volume client.
+    /// Creates a new HTTP volume client with no download size limit.
     #[must_use]
     pub const fn new(client: Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            max_download_bytes: None,
+        }
+    }
+
+    /// Caps a single download, in bytes. `None` means unlimited.
+    #[must_use]
+    pub const fn with_max_download_bytes(mut self, limit: Option<u64>) -> Self {
+        self.max_download_bytes = limit;
+        self
     }
 
     fn build_file_url(base_url: &str, file_id: &FileId) -> String {
@@ -98,7 +109,9 @@ impl HttpVolumeClient {
     async fn download_impl(&self, url: &str, file_id: &FileId) -> DomainResult<Vec<u8>> {
         let download_url = Self::build_file_url(url, file_id);
 
-        let response = self.client.get(&download_url).send().await.map_err(|e| {
+        // `mut` because the body is consumed chunk by chunk below rather than
+        // buffered in one shot.
+        let mut response = self.client.get(&download_url).send().await.map_err(|e| {
             DomainError::DownloadFailed {
                 reason: format!("HTTP request failed: {e}"),
             }
@@ -116,21 +129,53 @@ impl HttpVolumeClient {
             });
         }
 
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| DomainError::DownloadFailed {
-                reason: format!("Failed to read response body: {e}"),
-            })?;
+        // Reject on the advertised length before allocating anything at all.
+        // A cap that only trips after the buffer has already grown is not a cap.
+        if let (Some(limit), Some(advertised)) =
+            (self.max_download_bytes, response.content_length())
+        {
+            if advertised > limit {
+                return Err(DomainError::DownloadFailed {
+                    reason: format!(
+                        "body advertises {advertised} bytes, over the {limit} byte limit"
+                    ),
+                });
+            }
+        }
 
-        Ok(bytes.to_vec())
+        // Streamed rather than buffered whole, so a server that lies about (or
+        // omits) Content-Length still cannot force an unbounded allocation.
+        let mut buffer: Vec<u8> = Vec::new();
+        while let Some(chunk) =
+            response
+                .chunk()
+                .await
+                .map_err(|e| DomainError::DownloadFailed {
+                    reason: format!("Failed to read response body: {e}"),
+                })?
+        {
+            if let Some(limit) = self.max_download_bytes {
+                let total = u64::try_from(buffer.len().saturating_add(chunk.len()))
+                    .unwrap_or(u64::MAX);
+                if total > limit {
+                    return Err(DomainError::DownloadFailed {
+                        reason: format!("body exceeded the {limit} byte limit"),
+                    });
+                }
+            }
+            buffer.extend_from_slice(&chunk);
+        }
+
+        Ok(buffer)
     }
 
     async fn delete_impl(&self, url: &str, file_id: &FileId) -> DomainResult<()> {
         let delete_url = Self::build_file_url(url, file_id);
 
+        // DeleteFailed, not DownloadFailed. These used to be the same variant,
+        // so a failed delete was indistinguishable from a failed read.
         let response = self.client.delete(&delete_url).send().await.map_err(|e| {
-            DomainError::DownloadFailed {
+            DomainError::DeleteFailed {
                 reason: format!("HTTP request failed: {e}"),
             }
         })?;
@@ -142,7 +187,7 @@ impl HttpVolumeClient {
         }
 
         if !response.status().is_success() {
-            return Err(DomainError::DownloadFailed {
+            return Err(DomainError::DeleteFailed {
                 reason: format!("HTTP status: {}", response.status()),
             });
         }
