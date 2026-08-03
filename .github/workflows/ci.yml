@@ -175,16 +175,23 @@ jobs:
           python-version: "3.11"
 
       - name: Start SeaweedFS
-        # -ip=127.0.0.1 matters more than it looks: the master hands clients
-        # whatever address the volume server reported, so anything else here
-        # returns a name the runner cannot resolve and every read fails in a way
-        # that looks like a client bug.
+        # The two ip flags do different jobs and both are load-bearing:
+        #
+        #   -ip=127.0.0.1    the address ADVERTISED to clients. The master hands
+        #                    back whatever the volume server reported, so
+        #                    anything else returns a name the runner cannot
+        #                    resolve and reads fail looking like a client bug.
+        #   -ip.bind=0.0.0.0 the interface bound INSIDE the container. -ip.bind
+        #                    defaults to -ip, and binding container loopback puts
+        #                    the listener somewhere `docker -p` cannot forward
+        #                    to: the port is published, connects, and is reset.
         run: |
           set -euxo pipefail
           docker run -d --name seaweedfs \
             -p 9333:9333 -p 8080:8080 \
             "$SEAWEEDFS_IMAGE" \
-            server -ip=127.0.0.1 -dir=/data -master.volumeSizeLimitMB=100
+            server -ip=127.0.0.1 -ip.bind=0.0.0.0 -dir=/data \
+                   -master.volumeSizeLimitMB=100
 
       - name: Wait until it can actually assign a file id
         # Polling /dir/assign rather than the port: the master answers HTTP well
